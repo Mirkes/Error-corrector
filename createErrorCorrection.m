@@ -49,13 +49,22 @@ function res = createErrorCorrection(CR, WR, varargin)
 %           specified or omitted. This matrix will be taken into account
 %           only for empty WR.
 %
+%   Optional Name Value pairs for space selection and centralisation
+%       'Space' can have one of two values:
+%           'Original' means search of clusters and Fisher's discriminant
+%               in original space. In this case all arguments related to
+%               dimensionality reduction are ignored exclude 'PCDataset'.
+%           'Reduced' means search of clusters  and Fisher's discriminant
+%               in reduced space. 
+%           Default value is 'Reduced'.
+%       'centre' is vector to use for data centering. Default value is [].
+%           If argument is omitted then this vector is calculated as mean
+%           of dataset used for projector calculation (see 'PCDataset').
+%
 %   Optional Name Value pairs for dimensionality reduction. Dimensionality
 %       reduction is implemented as subtraction of 'centre' and projection
 %       onto subspace defined by column vectors in matrix 'project': 
 %           X = (X - centre) * project;
-%       'centre' is vector to use for data centering. Default value is [].
-%           If argument is omitted then this vector is calculated as mean
-%           of dataset used for projector calculation (see 'PCDataset').
 %       'project' is D-by-numPC matrix with basis of reduced space in
 %           columns. Each column will be normalised to unit length. Default
 %           value is []. If argument is omitted then this natrix will be
@@ -80,10 +89,6 @@ function res = createErrorCorrection(CR, WR, varargin)
 %           Default value true.
 %
 %   Optional Name Value pairs for clustering
-%       'ClusteringSpace' can have one of two values:
-%           'Original' means search of clusters in original space
-%           'Reduced' means search of clusters in reduced space.
-%           Default value is 'Original'.
 %       'numClusters' is number of clusters to use. It must be positive
 %           integer value. Default value is 100
 %
@@ -99,22 +104,23 @@ function res = createErrorCorrection(CR, WR, varargin)
 %           cases. 
 %        centre	is vector to subtract from data for centralisation. For PC
 %           projection it is mean vector of training set. 
-%        project is D-by-numPC matrix with basis of reduced (low
-%           dimensional) space. For PC projection it is matrix with
-%           specified number of PCs in columns. If data whitened then
-%           projection vectors (PCs) are whitened. 
+%        project depends on value of 'space': 
+%           if 'space' is 'reduced' then project is D-by-numPC matrix with
+%               basis of reduced (low dimensional) space. For PC projection
+%               it is matrix with specified number of PCs in columns. If
+%               data whitened then projection vectors (PCs) are whitened.
+%           if 'space' is 'original' then project is 1-by-D vector of
+%               standard deviations calculated for subset specified by
+%               'PCDataset' for each attribute fo whitening and vector of
+%               ones if whitening is not required. 
 %        centroids is numClust-by-D matrix contains centroids of clusters
-%           in original space.
-%        centroidsReduced is numClust-by-numPC matrix contains centroids of
-%           clusters in reduced space.
+%           in corresponding 'space'.
 %        centroids1	is row vector with D elements. This vector is centroid
-%           of one cluster in original space.
-%        centroidsReduced1 is row vector with numPC elements. This vector
-%           is centroid of one cluster in reduced space.
+%           of one cluster in corresponding 'space'.
 %        DF1 is column vector with D elements which is Fisher's
-%           discriminant direction for one cluster.
+%           discriminant direction in corresponding 'space' for one cluster.
 %        DF	is D-by-numClust matrix which contains Fisher's discriminant
-%           directions for all clusters.
+%           directions in corresponding 'space' for all clusters.
 %
 % References
 % This work is based on the theory and algorithms presented in:
@@ -156,9 +162,10 @@ function res = createErrorCorrection(CR, WR, varargin)
     centre = [];
     project = [];
     whitening = false;
-    clustSpace = true;
+    space = false;
     numClust = 100;
     numPC = 200;
+    debugInfo = [];
     % Check optional arguments
     for k = 1:2:length(varargin)
         s = varargin{k};
@@ -225,12 +232,12 @@ function res = createErrorCorrection(CR, WR, varargin)
             else
                 error("Value %s is inacceptable for argument 'whitening'. It must be true (whitening) or false (without whitening).", tmp);
             end
-        elseif strcmpi(s, 'ClusteringSpace')
+        elseif strcmpi(s, 'Space')
             switch lower(tmp)
                 case 'original'
-                    clustSpace = true;
+                    space = true;
                 case 'reduced'
-                    clustSpace = false;
+                    space = false;
                 otherwise
                     error("For 'ClusteringSpace' appropriate value is 'Original' or 'Reduced'. Value '%s' is not appropriate.", tmp);
             end
@@ -239,6 +246,8 @@ function res = createErrorCorrection(CR, WR, varargin)
                 error("Argument 'numClust' must be positive integer. Value %s is inacceptable", tmp);
             end
             numClust = round(tmp);
+%         elseif strcmpi(s, 'debug') % These two rows are saved for debugging only
+%             debugInfo = tmp;
         else
             error("Inacceptable argument '%s'", s)
         end
@@ -306,92 +315,122 @@ function res = createErrorCorrection(CR, WR, varargin)
     res.centre = centre;
     CRLS = CRLS - res.centre;
     WRLS = WRLS - res.centre;
-
-    % Calculate PCs if it is necessary
-    if isempty(project)
-        switch setPC
-            case 1
-                [project, ~, ev] = pca([CRLS; WRLS], 'Centered',false);
-            case 2
-                [project, ~, ev] = pca(CRLS, 'Centered',false);
-            case 3
-                [project, ~, ev] = pca(WRLS, 'Centered',false);
-        end
-        % Define number of PCs
-        if numPC > 0
-            numPC = round(numPC);
-            if numPC > size(CRLS, 1)
-                error("Requested number of PCs %d is greater than dimension of space %d.", numPC, size(CRLS, 1));
-            end
-        elseif numPC == 0
-            numPC = sum(ev > mean(ev));
-
-        elseif numPC == 1
-            numPC = brokenStick(ev);
-        else
-            numPC = sum(ev > (ev(1) / (-numPC)));
-        end
-        % Apply whitening, if necessary
-        if whitening
-            project = project(:, 1:numPC) * diag(1 ./ sqrt(ev(1:numPC)));
-        else
-            project = project(:, 1:numPC);
-        end
+    if space
+        res.space = 'Original';
     else
-        % Check the dimension
-        if size(project, 1) ~= D
-            error("Number of rows in matrix 'project' must be the same as number of column in all data matrices");
-        end
-        % Just in case normalise columns in project
-        numPC = size(project, 2);
-        project = bsxfun(@rdivide, project, sqrt(sum(project .^ 2)));
-        % Apply whitening, if necessary
+        res.space = 'Reduced';
+    end
+
+    if space
         if whitening
-            % Calculate preliminary projection for pseudo whitening
-            CRLSR = CRLS * project;
-            WRLSR = WRLS * project;
-            % Calculate variance of projections
             switch setPC
                 case 1
-                    stds = std([CRLSR; WRLSR]);
+                    project = std([CRLS; WRLS]);
                 case 2
-                    stds = std(CRLSR);
+                    project = std(CRLS);
                 case 3
-                    stds = std(WRLSR);
+                    project = std(WRLS);
             end
-            project = project * diag(1 ./ sqrt(stds));
+        else
+            project = ones(1, D);
         end
+        res.project = project;
+        % Rescale (whitening) data
+        CRLSR = CRLS ./ project;
+        WRLSR = WRLS ./ project;
+    else
+        % If we used reduced space
+        % Calculate PCs if it is necessary
+        if isempty(project)
+            switch setPC
+                case 1
+                    [project, ~, ev] = pca([CRLS; WRLS], 'Centered',false);
+                case 2
+                    [project, ~, ev] = pca(CRLS, 'Centered',false);
+                case 3
+                    [project, ~, ev] = pca(WRLS, 'Centered',false);
+            end
+            % Define number of PCs
+            if numPC > 0
+                numPC = round(numPC);
+                if numPC > size(CRLS, 1)
+                    error("Requested number of PCs %d is greater than dimension of space %d.", numPC, size(CRLS, 1));
+                end
+            elseif numPC == 0
+                numPC = sum(ev > mean(ev));
+
+            elseif numPC == 1
+                numPC = brokenStick(ev);
+            else
+                numPC = sum(ev > (ev(1) / (-numPC)));
+            end
+            % Apply whitening, if necessary
+            if whitening
+                project = project(:, 1:numPC) * diag(1 ./ sqrt(ev(1:numPC)));
+            else
+                project = project(:, 1:numPC);
+            end
+        else
+            % Check the dimension
+            if size(project, 1) ~= D
+                error("Number of rows in matrix 'project' must be the same as number of column in all data matrices");
+            end
+            % Just in case normalise columns in project
+            numPC = size(project, 2);
+            project = bsxfun(@rdivide, project, sqrt(sum(project .^ 2)));
+            % Apply whitening, if necessary
+            if whitening
+                % Calculate preliminary projection for pseudo whitening
+                CRLSR = CRLS * project;
+                WRLSR = WRLS * project;
+                % Calculate variance of projections
+                switch setPC
+                    case 1
+                        stds = std([CRLSR; WRLSR]);
+                    case 2
+                        stds = std(CRLSR);
+                    case 3
+                        stds = std(WRLSR);
+                end
+                project = project * diag(1 ./ sqrt(stds));
+            end
+        end
+        res.project = project;
+        % Calculate projections of training sets to project
+        CRLSR = CRLS * project;
+        WRLSR = WRLS * project;
     end
-    res.project = project;
-    % Calculate projections of training sets to project
-    CRLSR = CRLS * project;
-    WRLSR = WRLS * project;
     
     % Clustering
     % Form data for one cluster 
     % Centroid of one cluster is vector of zeros for reduced space and
     % for original space because we use cetered data only!
-    res.centroids1 = zeros(1, D);
-    res.centroidsReduced1 = zeros(1, size(WRLSR, 2));
-
+    res.centroids1 = zeros(1, size(WRLSR, 2));
     if numClust > 1
-        if clustSpace
-            % Original space
-            [labs, centroids] = kmeans(WRLS, numClust);
-            res.centroids = centroids;
-            res.centroidsReduced = centroids * project;
-        else
-            % Reduced space. Search clusters and store centroids
-            [labs, centroids] = kmeans(WRLSR, numClust);
-            res.centroidsReduced = centroids;
-            res.centroids = (project * centroids')';
+% if isempty(debugInfo)
+        % Reduced space. Search clusters and store centroids
+        [labs, centroids] = kmeans(WRLSR, numClust);
+% else  % These lines were used to reproduce the same clusters. It was necessary for debugging only.
+%     labs = debugInfo.ind;
+%     centroids = debugInfo.centres;
+% end
+        res.centroids = centroids;
+        % Remove empty clusters
+        for k = numClust:-1:1
+            tmp = sum(labs == k);
+            if tmp == 0
+                res.centroidsReduced(k, :) = [];
+                res.centroids(k, :) = [];
+                labs(labs > k) = labs(labs > k) - 1;
+            end
         end
+        % Recalculate number of clusters
+        numClust = size(res.centroids, 1);
     else
         % There is no clusters
         % Centroid of one cluster is vector of zeros for reduced space and
         % for original space because we use cetered data only!
         res.centroids = res.centroid1;
-        res.centroidsReduced = res.centroidsReduced1;
     end
 
     % Form Fisher's Discriminant (FDDirect) directions
@@ -400,20 +439,22 @@ function res = createErrorCorrection(CR, WR, varargin)
     meanCRLSR = mean(CRLSR);
     % Firstly form for one cluster
     res.FD1 = ((covCRLSR + cov(WRLSR)) \ (meanCRLSR - mean(WRLSR))');
-    % Recalculate it to original space
-    res.FD1 = project * res.FD1;
-    res.FD1 = res.FD1 / sqrt(sum(res.FD1));
+    % Should be perhaps removed
+    res.FD1 = res.FD1 / sqrt(sum(res.FD1 .^ 2)); 
     % Now consider clusters
     if numClust > 1
         res.FD = zeros(numPC, numClust);
         for k = 1:numClust
             % Get required fragment of WRLSR
             tmp = WRLSR(labs == k, :);
-            res.FD(:, k) = (covCRLSR + cov(tmp)) \ (meanCRLSR - mean(tmp))';
+            if size(tmp, 1) == 1
+                cov1 = 0;
+            else
+                cov1 = cov(tmp);
+            end
+            res.FD(:, k) = (covCRLSR + cov1) \ (meanCRLSR - mean(tmp, 1))';
         end
-        % Conver to original space
-        res.FD = project * res.FD;
-        res.FD = bsxfun(@rdivide, res.FD, sum(res.FD));
+        res.FD = res.FD ./ sqrt(sum(res.FD .^ 2));
     else
         res.FD = res.FD1;
     end
