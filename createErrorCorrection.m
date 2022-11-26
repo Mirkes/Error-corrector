@@ -1,5 +1,5 @@
 function res = createErrorCorrection(CR, WR, varargin)
-%createNeedCorrection creates a classifier to identify data points
+%createErrorCorrection creates a classifier to identify data points
 %corresponding to erroneous or otherwise other undesirable
 %outputs/instances of behaviour. 
 %The application of the classifier enables to filter these undesirable
@@ -67,13 +67,14 @@ function res = createErrorCorrection(CR, WR, varargin)
 %           X = (X - centre) * project;
 %       'project' is D-by-numPC matrix with basis of reduced space in
 %           columns. Each column will be normalised to unit length. Default
-%           value is []. If argument is omitted then this natrix will be
-%           completed by PCs od specified dataset (see 'PCDataset').
+%           value is []. If argument is omitted then this matrix will be
+%           completed by PCs of specified dataset (see 'PCDataset').
 %       'PCDataset' is dataset used to calculate principle components.
 %           There are three possible value:
 %           'All': PCs should be calculated on base of CRLS and WRLS
 %           'CR': PCs should be calculated on base of CRLS
 %           'WR': PCs should be calculated on base of WRLS
+%           Default value is 'CR'.
 %       'numPC' is number of PCs to use. Default value is 200.
 %           positive integer is number of PCS to use. 
 %           0 means that number of PCs will be defined by Kaiser rule (all
@@ -101,9 +102,15 @@ function res = createErrorCorrection(CR, WR, varargin)
 %        WRLS is matrix m3-by-D which is training set for wrongly
 %           recognised cases. 
 %        WRTS is matrix m4-by-D which is test set for wrongly recognised
-%           cases. 
+%           cases.
 %        centre	is vector to subtract from data for centralisation. For PC
 %           projection it is mean vector of training set. 
+%        space can have one of two values:
+%           'Original' means search of clusters and Fisher's discriminant
+%               in original space. In this case all arguments related to
+%               dimensionality reduction are ignored exclude 'PCDataset'.
+%           'Reduced' means search of clusters  and Fisher's discriminant
+%               in reduced space. 
 %        project depends on value of 'space': 
 %           if 'space' is 'reduced' then project is D-by-numPC matrix with
 %               basis of reduced (low dimensional) space. For PC projection
@@ -111,16 +118,17 @@ function res = createErrorCorrection(CR, WR, varargin)
 %               data whitened then projection vectors (PCs) are whitened.
 %           if 'space' is 'original' then project is 1-by-D vector of
 %               standard deviations calculated for subset specified by
-%               'PCDataset' for each attribute fo whitening and vector of
+%               'PCDataset' for each attribute for whitening and vector of
 %               ones if whitening is not required. 
-%        centroids is numClust-by-D matrix contains centroids of clusters
-%           in corresponding 'space'.
-%        centroids1	is row vector with D elements. This vector is centroid
-%           of one cluster in corresponding 'space'.
-%        DF1 is column vector with D elements which is Fisher's
+%        centroids is numClust-by-D or numClust-by-numPC matrix contains 
+%           centroids of clusters in corresponding 'space'.
+%        centroids1 is row vector with D or numPC elements. This vector is 
+%           centroid of one cluster in corresponding 'space'.
+%        DF1 is column vector with D or numPC elements which is Fisher's
 %           discriminant direction in corresponding 'space' for one cluster.
-%        DF	is D-by-numClust matrix which contains Fisher's discriminant
-%           directions in corresponding 'space' for all clusters.
+%        DF is D-by-numClust or or numPC-by-numClust matrix which contains 
+%           Fisher's discriminant directions in corresponding 'space' for 
+%           all clusters.
 %
 % References
 % This work is based on the theory and algorithms presented in:
@@ -359,7 +367,7 @@ function res = createErrorCorrection(CR, WR, varargin)
             elseif numPC == 0
                 numPC = sum(ev > mean(ev));
 
-            elseif numPC == 1
+            elseif numPC == -1
                 numPC = brokenStick(ev);
             else
                 numPC = sum(ev > (ev(1) / (-numPC)));
