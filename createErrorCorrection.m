@@ -32,7 +32,7 @@ function res = createErrorCorrection(CR, WR, varargin)
 %           data. D MUST be the same for all specified matrix CR, CRLS,
 %           CRTS, WR, WRLS, WRTS. Matrices CRLS and CRTS must be both
 %           specified or omitted. This matrix will be taken into account
-%           only for empty WR.
+%           only for empty CR.
 %       'CRTS' is NT-by-D matrix with training set for correctly recognised
 %           data. D MUST be the same for all specified matrix CR, CRLS,
 %           CRTS, WR, WRLS, WRTS.  Matrices CRLS and CRTS must be both
@@ -40,7 +40,7 @@ function res = createErrorCorrection(CR, WR, varargin)
 %           only for empty CR.
 %       'WRLS' is NL-by-D matrix with training set for wrongly recognised
 %           data. D MUST be the same for all specified matrix CR, CRLS,
-%           CRTS, WR, WRLS, WRTS. Matrices CRLS and CRTS must be both
+%           CRTS, WR, WRLS, WRTS. Matrices WRLS and WRTS must be both
 %           specified or omitted. This matrix will be taken into account
 %           only for empty WR.
 %       'WRTS' is NT-by-D matrix with training set for wrongly recognised
@@ -361,8 +361,8 @@ function res = createErrorCorrection(CR, WR, varargin)
             % Define number of PCs
             if numPC > 0
                 numPC = round(numPC);
-                if numPC > size(CRLS, 1)
-                    error("Requested number of PCs %d is greater than dimension of space %d.", numPC, size(CRLS, 1));
+                if numPC > size(CRLS, 1) || numPC > size(CRLS, 2)
+                    error("Requested number of PCs %d is greater than dimension of data (minimum of number of observations and number of attributes) %dx%d.", numPC, size(CRLS, 1), size(CRLS, 2));
                 end
             elseif numPC == 0
                 numPC = sum(ev > mean(ev));
