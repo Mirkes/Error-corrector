@@ -381,7 +381,7 @@ function res = statsErrorCorrector(data, varargin)
             n = length(WRTProjClust{k});
             WRTProjSc(nextWT:nextWT+n-1) = (WRTProjClust{k} - shift) / scale;
             nextWT = nextWT + n;
-        elseif scaler == 3
+        elseif scaler == 2
             % Skip if the training set data are empty.
             if (length(CRLProjClust{k}) + length(CRTProjClust{k})) == 0
                 continue
@@ -389,7 +389,7 @@ function res = statsErrorCorrector(data, varargin)
             ma = max([CRLProjClust{k}; CRTProjClust{k}]);
             mi = min([CRLProjClust{k}; CRTProjClust{k}]);
             scale = ma - mi;
-            sfift = mi + ma;
+            shift = mi + ma;
             n = length(CRLProjClust{k});
             CRLProjSc(nextCL:nextCL+n-1) = (2 * CRLProjClust{k} - shift) / scale;
             nextCL = nextCL + n;
