@@ -38,12 +38,12 @@ function res = createErrorCorrection(CR, WR, varargin)
 %           CRTS, WR, WRLS, WRTS.  Matrices CRLS and CRTS must be both
 %           specified or omitted. This matrix will be taken into account
 %           only for empty CR.
-%       'WRLS' is NL-by-D matrix with training set for wrongly recognised
+%       'WRLS' is ML-by-D matrix with training set for wrongly recognised
 %           data. D MUST be the same for all specified matrix CR, CRLS,
 %           CRTS, WR, WRLS, WRTS. Matrices WRLS and WRTS must be both
 %           specified or omitted. This matrix will be taken into account
 %           only for empty WR.
-%       'WRTS' is NT-by-D matrix with training set for wrongly recognised
+%       'WRTS' is MT-by-D matrix with training set for wrongly recognised
 %           data. D MUST be the same for all specified matrix CR, CRLS,
 %           CRTS, WR, WRLS, WRTS. Matrices WRLS and WRTS must be both
 %           specified or omitted. This matrix will be taken into account
@@ -87,7 +87,7 @@ function res = createErrorCorrection(CR, WR, varargin)
 %           if project is specified then numPC is number of columns in
 %               marix project.
 %       'Whitening' can be true (whitening) or false (without whitening).
-%           Default value true.
+%           Default value false.
 %
 %   Optional Name Value pairs for clustering
 %       'numClusters' is number of clusters to use. It must be positive
